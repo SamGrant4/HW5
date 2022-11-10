@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Breakout Game</title>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+        }
+        body {
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            /* width: 100vw;
+            height: 100vh; */
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            background: #eee;
+            display: block;
+            margin: 0 auto;
+        }
+        #start-game{
+            position: absolute; 
+            top:150px; 
+            left:565px;
+            background-color: red; 
+            border: none;
+            color: white;
+            padding: 16px 32px;
+            text-align: center;
+            display: inline-block;
+            font-size: 16px;
+        }
+        #options{
+            font-weight: bold;
+            text-align: center;
+            font-size: 1.5rem;
+            color: black;
+        }
+
+        #options-container {
+            padding: 10px 20px;
+            border: 1px dashed red;
+            margin: 10px
+        }
+
+        #options-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 200px);
+            gap: 10px;
+            margin: 20px 0;
+            justify-content: space-evenly;
+        }
+        #pause-button{
+            grid-column-start: span 2;
+        }
+        #reload-button{
+            grid-column-start: span 2;
+        }
+    </style>
+
+    <script>
+        var color1 = "#27cf28";
+        var color2 = "red"
+    
+        window.onload = function () {
+            var canvas = document.getElementById("myCanvas");
+            var slider = document.getElementById("game-speed-slider");
+            var speedDisplay = document.getElementById("game-speed-span");
+            var pauseButton = document.getElementById("pause-button");  
+            var newGameButton = document.getElementById("new-game-button");
+            var contPlayButton = document.getElementById("cont-playing-button");
+            var reloadButton = document.getElementById("reload-button");
+            var ctx = canvas.getContext("2d");
+            var ballRadius = 10;
+            var x = canvas.width / 2;
+            var y = canvas.height - 30;
+            var dx = 2;
+            var dy = -2;
+            var paddleHeight = 10;
+            var paddleWidth = 75;
+            var paddleX = (canvas.width - paddleWidth) / 2;
+            var rightPressed = false;
+            var leftPressed = false;
+            var brickRowCount = 5;
+            var brickColumnCount = 3;
+            var brickWidth = 75;
+            var brickHeight = 20;
+            var brickPadding = 10;
+            var brickOffsetTop = 30;
+            var brickOffsetLeft = 30;
+            var score = 0;
+            var lives = 3;
+            var highScore = 0;
+            var gameSpeedMultiplier = 1;
+            var gamePaused = false;
+            var gameWin = false;
+            var gameLoss = false;
+
+            // 2D array that holds the bricks 
+            var bricks = [];
+            for (var c = 0; c < brickColumnCount; c++) {
+                bricks[c] = [];
+                for (var r = 0; r < brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, status: 1 };
+                }
+            }
+
+            document.addEventListener("keydown", keyDownHandler, false);
+            document.addEventListener("keyup", keyUpHandler, false);
+            document.addEventListener("mousemove", mouseMoveHandler, false);
+            newGameButton.addEventListener('click', startNewGame);
+            contPlayButton.addEventListener('click', continuePlaying);
+            reloadButton.addEventListener('click', reloadWindow);
+            pauseButton.addEventListener('click', togglePauseGame);
+
+            // Function for key down
+            function keyDownHandler(e) {
+                if (e.keyCode == 39) {
+                    rightPressed = true;
+                }
+                else if (e.keyCode == 37) {
+                    leftPressed = true;
+                }
+            }
+
+            // Function for key up
+            function keyUpHandler(e) {
+                if (e.keyCode == 39) {
+                    rightPressed = false;
+                }
+                else if (e.keyCode == 37) {
+                    leftPressed = false;
+                }
+            }
+
+            // Function for mouse move
+            function mouseMoveHandler(e) {
+                var relativeX = e.clientX - canvas.offsetLeft;
+                if (relativeX > 0 && relativeX < canvas.width) {
+                    paddleX = relativeX - paddleWidth / 2;
+                }
+            }
+
+            // Function detects if ball collides with brick
+            function collisionDetection() {
+                // loops through the bricks
+                for (var c = 0; c < brickColumnCount; c++) {
+                    for (var r = 0; r < brickRowCount; r++) {
+                        var b = bricks[c][r];
+                        if (b.status == 1) {
+                            // if ball hits the brick ball changes direction
+                            if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                                dy = -dy;
+                                // brick status is set to 0 and it disappears
+                                b.status = 0;
+                                // add one to score everytime the ball hits a brick
+                                score++;
+                                // If all bricks have been destroyed display win message
+                                if (score == brickRowCount * brickColumnCount) {
+                                    gameWin = true;
+                                    checkWinState()
+                                    togglePauseGame()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Function draws the ball
+            function drawBall() {
+                ctx.beginPath();
+                ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+                ctx.fillStyle = color2;
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            // Function draws the paddle 
+            function drawPaddle() {
+                ctx.beginPath();
+                ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+                ctx.fillStyle = color2;
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            // Function draws the Bricks
+            function drawBricks() {
+                for (var c = 0; c < brickColumnCount; c++) {
+                    for (var r = 0; r < brickRowCount; r++) {
+                        // only draw the brick if its status is 1
+                        if (bricks[c][r].status == 1) {
+                            // Places the brick in the correct row and column
+                            var brickX = (r * (brickWidth + brickPadding)) + brickOffsetLeft;
+                            var brickY = (c * (brickHeight + brickPadding)) + brickOffsetTop;
+                            bricks[c][r].x = brickX;
+                            bricks[c][r].y = brickY;
+                            // Draws the brick
+                            ctx.beginPath();
+                            ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                            ctx.fillStyle = color1;
+                            ctx.fill();
+                            ctx.closePath();
+                        }
+                    }
+                }
+            }
+        
+            // Function draws the score
+            function drawScore() {
+                ctx.font = "16px Arial";
+                ctx.fillStyle = color2;
+                ctx.fillText("Score: " + score, 60, 20);
+            }
+
+            // Function draws a high score
+            function drawHighScore() {
+                ctx.font = "16px Arial";
+                ctx.fillStyle = color2;
+                ctx.fillText("High Score: " + highScore, 200, 20);
+            }
+
+            // Function draws the lives 
+            function drawLives() {
+                ctx.font = "16px Arial";
+                ctx.fillStyle = color2;
+                ctx.fillText("Lives: " + lives, canvas.width - 65, 20);
+            }
+
+            // Function draws everything on the canvas
+            function draw() {
+                // Clears the canvas content
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draws everything on the canvas
+                drawBricks();
+                drawBall();
+                drawPaddle();
+                drawScore();
+                drawHighScore();
+                drawLives();
+                collisionDetection();
+                checkWinState();
+
+                // Makes the ball bounce off the left and right wall
+                if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+                    dx = -dx;
+                }
+                // Makes the ball bounce off the top 
+                if (y + dy < ballRadius) {
+                    dy = -dy;
+                }
+                // Detects if the ball hits the paddle or the bottom
+                else if (y + dy > canvas.height - ballRadius) {
+                    // If ball hits paddle the ball bounces back up
+                    if (x > paddleX && x < paddleX + paddleWidth) {
+                        dy = -dy;
+                    }
+                    // If it hits the bottom then a life is lost
+                    else {
+                        lives--;
+                        // If lives reach 0 displays game over 
+                        if (lives <= 0) {
+                            gameLoss = true;
+                            //checkWinState()
+                            togglePauseGame()
+                        }
+                        // Else it is reset
+                        else {
+                            x = canvas.width / 2;
+                            y = canvas.height - 30;
+                            dx = 3;
+                            dy = -3;
+                            paddleX = (canvas.width - paddleWidth) / 2;
+                        }
+                    }
+                }
+
+                // Moves the paddle right or left
+                if (rightPressed && paddleX < canvas.width - paddleWidth) {
+                    paddleX += 7;
+                }
+                else if (leftPressed && paddleX > 0) {
+                    paddleX -= 7;
+                }
+
+                // updates speed of ball based on multiplier
+                x += (dx * gameSpeedMultiplier);
+                y += (dy * gameSpeedMultiplier);
+
+                // pause game check
+                if(gamePaused){
+                    console.log("Game Paused")
+                }
+                else{
+                    requestAnimationFrame(draw);
+                }
+            }                    
+
+            // Function draws the menu screen, including labels and button
+            function drawMenu() {
+                // draw the rectangle menu backdrop
+                ctx.beginPath();
+                ctx.rect(10, 10, 460, 300);
+                ctx.fillStyle = color1;
+                ctx.fill();
+                ctx.closePath();
+                //draw the menu header
+                ctx.font = "bold 24pt Courier New";
+                ctx.fillStyle = color2;
+                ctx.fillText("Breakout Game", 115, 50);
+                //start game button area
+                ctx.beginPath();
+                ctx.rect(165, 100, 150, 70);
+                ctx.fillStyle = color2;;
+                // sets shadow
+                setShadow()
+                ctx.fill();
+                ctx.closePath();
+                resetShadow()
+                ctx.font = "bold 16pt Courier New";
+                ctx.fillStyle = "white";
+                ctx.fillText("Start Game", 175, 135);
+                // adjust speed
+                adjustGameSpeed()
+                //event listener for clicking start
+                canvas.addEventListener('click', startGameClick);
+            }
+
+            // Function sets shadow properties
+            function setShadow() {
+                ctx.shadowColor = "black";
+                ctx.shadowOffsetX = 5;
+                ctx.shadowOffsetY = 5;
+                ctx.shadowBlur = 4;
+            };
+
+            // Function resets shadow properties to 'normal'
+            function resetShadow() {
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.shadowBlur = 0;
+            };
+
+            // Function clears the menu when we want to start the game
+            function clearMenu() {
+                //remove event listener for menu     
+                canvas.removeEventListener('click', startGameClick);      
+            }
+
+            // Function starts the game
+            function startGameClick(event) {
+                var rect = canvas.getBoundingClientRect();
+                var x = event.clientX - rect.left
+                var y = event.clientY - rect.top
+                if(x > 165 && x < 315 && y > 100 && y < 170){
+                    clearMenu();
+                    draw();
+                }
+            }
+
+            // Function handles game speed adjustments when we move our slider
+            function adjustGameSpeed() {
+                //update the slider display  
+                speedDisplay.innerHTML = slider.value; 
+                slider.oninput = function() {
+                    speedDisplay.innerHTML = this.value;
+                }             
+                //update the game speed multiplier   
+                slider.addEventListener('mouseup', function() {
+                    gameSpeedMultiplier = slider.value;
+                });  
+            };
+
+            // Function toggles the play/paused game state
+            function togglePauseGame() {
+                if(gamePaused){
+                    gamePaused = false;
+                    requestAnimationFrame(draw);
+                }
+                else{
+                    gamePaused = true;
+                    requestAnimationFrame(draw);
+                }
+            };
+
+            // Function checks win state
+            // if we win, we want to accumulate high score and draw a message to the canvas
+            // if we lose, we want to draw a losing message to the canvas
+            function checkWinState() {
+                if(gameWin){
+                    highScore += score;
+                    ctx.font = "bold 24pt Courier New";
+                    ctx.fillStyle = color2;
+                    ctx.fillText("You Win!", 150, 150);
+                    resetBoard()
+                }
+                if(gameLoss){
+                    lives = 0;
+                    ctx.font = "bold 24pt Courier New";
+                    ctx.fillStyle = color2;
+                    ctx.fillText("You Lose!", 150, 150);
+                    resetBoard()
+                }
+            };
+
+            // Function clears the board state and starts a new game (no high score accumulation)
+            function startNewGame() {
+                // Clear the high score and score
+                highScore = 0;
+                score = 0;
+                // Reset lives back to 3
+                lives = 3;
+                // Resets bricks, paddle, and ball
+                resetBoard()
+                // Resets win and loss
+                gameWin = false;
+                gameLoss = false;
+                togglePauseGame()
+            };
+
+            // Function resets the board and continue playing (accumulate high score)
+            function continuePlaying() {
+                // lives set to 3 if it was a loss
+                if(lives <= 0){
+                    lives = 3;
+                }
+                // Resets bricks, paddle, and ball (and sets score to 0)
+                resetBoard()
+                // Resets win and loss
+                gameWin = false;
+                gameLoss = false;
+                togglePauseGame()
+            };
+
+            // Function resets starting game info
+            function resetBoard() {
+                // Reset bricks 
+                for (var c = 0; c < brickColumnCount; c++) {
+                    for (var r = 0; r < brickRowCount; r++) {
+                        bricks[c][r].status = 1
+                    }
+                } 
+                // Reset paddle
+                paddleX = (canvas.width - paddleWidth) / 2;
+                // Resets ball position 
+                x = canvas.width / 2;
+                y = canvas.height - 30;  
+                // sets score to 0 
+                score = 0;   
+            };
+
+            function reloadWindow(){
+                console.log("Reload button clicked")
+                document.location.reload();
+            }
+
+            //draw the menu.
+            drawMenu();
+        }; //end window.onload function
+    </script>
+</head>
+
+<body>
+    <div id="game-container"> 
+        <canvas id="myCanvas" width="480" height="320"></canvas>
+    </div>
+    <div id="options-container">
+        <div id="options"> Options </div>
+        <div id="options-buttons">
+            <button id="pause-button"> Toggle Pause Game </button>
+            <p> Game Speed: <span id="game-speed-span"></span></p>
+            <input type="range" min="0.05" max="4" value="1" step="0.05" class="slider" id="game-speed-slider">
+            <button id="new-game-button"> New Game (reset) </button>
+            <button id="cont-playing-button"> Continue Playing </button>
+            <button id="reload-button"> Reload Window </button>
+        </div>
+    </div>
+
+</body>
+
+</html>
